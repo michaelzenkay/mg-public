@@ -1,0 +1,56 @@
+run_name: public-example
+
+# Data / outputs (replace with your paths)
+ds_csv_path: /path/to/mammo_db.csv
+results_dir: /path/to/results/
+
+backbone: effv2s
+gpus: [0]
+num_workers: 4
+
+# Batching
+batch_size_img: 2
+batch_size_exam: 1
+gradient_accumulation: 2
+
+# Optimization / schedule
+epochs: 100
+lr: 0.001                # effv2s backbone is overridden to 3e-4 in code
+lr_phase3_mult: 0.2
+lr_min: 0.00001
+pretrain_epochs: 6
+taper_epochs: 20
+aux_weight_final: 0.25
+freeze_backbone_epochs: 10
+
+# Optional param-group knobs (defaults shown)
+lr_mult_heads: 3.0
+wd_backbone: 0.0001
+wd_heads: 0.0001
+
+# categorical heads: [name, num_classes]
+cats:
+  - [view, 2]
+  - [laterality, 2]
+  - [target, 3]
+  - [filter, 5]
+  - [manufacturer, 3]
+  - [bc, 2]
+
+# regression heads (dataset keys)
+regs:
+  - KVP
+  - mAs
+  - age
+  - months_to_dx
+
+# risk head config
+risk:
+  - name: risk
+    horizons: 5
+    weight: 5.0
+
+# Optional debugging
+# debug_frac: 0.01
+# resume: /path/to/results/<run_dir>/
+

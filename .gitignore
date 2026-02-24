@@ -1,0 +1,14 @@
+configs/*
+!configs/example_train.yaml
+.vscode/
+old/
+pacs.py
+__pycache__/
+*.pyc
+*.sh
+*.out
+scratch*
+*tomo*
+*.tex
+*.pdf
+.claude/

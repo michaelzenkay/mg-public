@@ -1,0 +1,19 @@
+name: mg-public
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy=1.26
+  - pandas=2.2
+  - pyyaml=6.0
+  - tqdm=4.67
+  - pillow=10.4
+  - scikit-learn=1.5
+  - pytorch>=2.2,<2.6
+  - torchvision>=0.17,<0.21
+  - cpuonly  # remove for CUDA and install the matching pytorch build
+  - pip
+  - pip:
+      - pyarrow==18.1.0  # optional parquet support

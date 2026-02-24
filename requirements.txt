@@ -1,0 +1,14 @@
+# Core training/eval dependencies for the public export (pinned)
+# Note: torch/torchvision are intentionally version-ranged due CUDA/CPU build selection.
+numpy==1.26.4
+pandas==2.2.3
+PyYAML==6.0.2
+tqdm==4.67.1
+Pillow==10.4.0
+scikit-learn==1.5.2
+
+torch>=2.2,<2.6
+torchvision>=0.17,<0.21
+
+# Optional: parquet output for val_preds_best.parquet
+pyarrow==18.1.0
