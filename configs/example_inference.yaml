@@ -1,0 +1,43 @@
+# example_inference.yaml — single config for running eval_external.py
+#
+# Fill in checkpoint, csv, output, then run:
+#   python eval_external.py --config configs/example_inference.yaml
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+checkpoint: /path/to/checkpoint/dir/   # directory (auto-picks *_best.pth) or explicit .pth
+csv: /path/to/eval_dataset.csv
+output: /path/to/predictions.csv       # CSV is always written; parquet sidecar is attempted
+
+# ── Hardware ──────────────────────────────────────────────────────────────────
+batch_size: 8
+num_workers: 4   # use 0 on Windows
+gpus: [0]        # use [] for CPU-only
+
+# ── Filtering ─────────────────────────────────────────────────────────────────
+incomplete: false   # set true to include exams with <4 views
+no_cancer: false
+
+# ── Model spec ────────────────────────────────────────────────────────────────
+# Must match the heads in the .pth. Adjust cats/regs to match your training config.
+backbone: effv2s
+target_h: 882
+target_w: 512
+
+cats:                        # [head_name, num_output_classes]
+  - [view, 2]
+  - [laterality, 2]
+  - [target, 3]
+  - [filter, 5]
+  - [manufacturer, 3]
+  - [bc, 2]
+
+regs:                        # regression head names (must match training CSV column keys)
+  - KVP
+  - mAs
+  - age
+  - months_to_dx
+
+risk_specs:
+  - name: risk
+    horizons: 5              # number of time horizons (1yr … 5yr)
+    weight: 5.0

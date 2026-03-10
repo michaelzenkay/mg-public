@@ -21,6 +21,7 @@ from models import build_model
 from datasets import (
     train_test_load, train_test_load_exams,
     ds2024, ExamDataset, exam_collate, safe_collate,
+    _normalize_mirai_to_native,
 )
 def hazard_to_cumulative_risk(logits):
     """hazard_t = sigmoid(logit_t); cumulative_risk = 1 - cumprod(1 - hazard)."""
@@ -584,7 +585,7 @@ def run_train_staged(ds_csv_path, epochs=100, batch_size_img=4, batch_size_exam=
 
 def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_workers=4,
                                  gpus=[0], require_complete=True, output_csv=None,
-                                 no_cancer=False):
+                                 no_cancer=False, run_cfg=None):
     """Evaluate a trained model on a dataset using the same loading as training.
 
     Args:
@@ -597,6 +598,8 @@ def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_wor
         require_complete: Only evaluate complete exams (all 4 views)
         output_csv: Optional path to save per-exam predictions
         no_cancer: If True, exclude all patients who have/develop cancer
+        run_cfg: Dict with model spec (backbone, cats, regs, risk_specs, target_h, target_w).
+                 If not provided, loaded from run_config.yaml alongside the checkpoint.
 
     Returns:
         dict: Metrics including auc_h1yr..auc_h5yr, auc_mean
@@ -614,11 +617,15 @@ def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_wor
     if not ckpt_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
-    # Load run config
-    run_config_path = ckpt_path.parent / "run_config.yaml"
-    if not run_config_path.exists():
-        raise FileNotFoundError(f"run_config.yaml not found in {ckpt_path.parent}")
-    run_cfg  = yaml.safe_load(run_config_path.read_text())
+    # Load model spec — from caller-supplied dict or run_config.yaml alongside checkpoint
+    if run_cfg is None or 'backbone' not in run_cfg:
+        run_config_path = ckpt_path.parent / "run_config.yaml"
+        if not run_config_path.exists():
+            raise FileNotFoundError(
+                f"Model spec not found: pass backbone/cats/regs/risk_specs in your eval config, "
+                f"or place run_config.yaml in {ckpt_path.parent}"
+            )
+        run_cfg = yaml.safe_load(run_config_path.read_text())
     backbone = run_cfg.get('backbone', 'effv2s')
 
     # Reconstruct specs from saved config
@@ -657,12 +664,14 @@ def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_wor
 
     # Filter to no-cancer patients if requested
     if no_cancer:
-        df = pd.read_csv(csv_path, low_memory=False)
+        df = _normalize_mirai_to_native(pd.read_csv(csv_path, low_memory=False).copy())
         if 'pid' not in df.columns:
             if 'pid_acc' in df.columns:
                 df['pid'] = df['pid_acc'].astype(str).str.split('_').str[0]
             else:
                 raise KeyError("Need 'pid' or 'pid_acc' for patient-level filtering")
+        if 'bc' not in df.columns:
+            raise KeyError("Need 'bc' after CSV normalization for patient-level filtering")
         cancer_pids = df[df['bc'].astype(str).str.upper() == 'BC']['pid'].unique()
         before      = df['pid'].nunique()
         df          = df[~df['pid'].isin(cancer_pids)].copy()

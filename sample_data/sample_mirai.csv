@@ -1,0 +1,13 @@
+patient_id,exam_id,laterality,view,file_path,years_to_cancer,years_to_last_followup,split_group
+P_00038,P_00038_1,L,CC,sample_data/pngs/P_00038/P_00038_LCC.png,100,2,test
+P_00038,P_00038_1,L,MLO,sample_data/pngs/P_00038/P_00038_LMLO.png,100,2,test
+P_00038,P_00038_1,R,CC,sample_data/pngs/P_00038/P_00038_RCC.png,100,2,test
+P_00038,P_00038_1,R,MLO,sample_data/pngs/P_00038/P_00038_RMLO.png,100,2,test
+P_00077,P_00077_1,L,CC,sample_data/pngs/P_00077/P_00077_LCC.png,100,2,test
+P_00077,P_00077_1,L,MLO,sample_data/pngs/P_00077/P_00077_LMLO.png,100,2,test
+P_00077,P_00077_1,R,CC,sample_data/pngs/P_00077/P_00077_RCC.png,100,2,test
+P_00077,P_00077_1,R,MLO,sample_data/pngs/P_00077/P_00077_RMLO.png,100,2,test
+P_00140,P_00140_1,L,CC,sample_data/pngs/P_00140/P_00140_LCC.png,100,2,test
+P_00140,P_00140_1,L,MLO,sample_data/pngs/P_00140/P_00140_LMLO.png,100,2,test
+P_00140,P_00140_1,R,CC,sample_data/pngs/P_00140/P_00140_RCC.png,100,2,test
+P_00140,P_00140_1,R,MLO,sample_data/pngs/P_00140/P_00140_RMLO.png,100,2,test

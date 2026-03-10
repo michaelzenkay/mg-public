@@ -53,8 +53,8 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--config", default="configs/eval.yaml",
-                   help="YAML config path (default: configs/eval.yaml). "
+    p.add_argument("--config", default="configs/example_inference.yaml",
+                   help="YAML config path (default: configs/example_inference.yaml). "
                         "CLI args override YAML values.")
     p.add_argument("--checkpoint",
                    help="Run directory (auto-selects best checkpoint) or explicit .pth path.")
@@ -124,6 +124,7 @@ def main():
         require_complete=not incomplete,
         output_csv=output_csv,
         no_cancer=no_cancer,
+        run_cfg=cfg,
     )
     return 0
 

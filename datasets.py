@@ -36,6 +36,53 @@ _REG_RANGES = {
 _HORIZONS_MONTHS = [12, 24, 36, 48, 60]
 _VIEW_TYPE_TO_ID = {"LCC": 0, "LMLO": 1, "RCC": 2, "RMLO": 3}
 
+_MIRAI_VIEW_NORM = {"CC": "CC", "MLO": "MLO", "LCC": "CC", "LMLO": "MLO",
+                    "RCC": "CC", "RMLO": "MLO"}
+
+
+def _normalize_mirai_to_native(df: pd.DataFrame) -> pd.DataFrame:
+    """Auto-detect and convert MIRAI-format CSV columns to mg native format.
+
+    MIRAI columns: patient_id, exam_id, file_path, laterality, view,
+                   years_to_cancer, years_to_last_followup
+    Native columns: pid, pid_acc, image_path, laterality, view,
+                    bc, months_to_dx, followup_months
+
+    Returns df unchanged if already in native format (has pid_acc or image_path).
+    """
+    cols = set(df.columns.str.lower())
+    if 'patient_id' not in cols and 'file_path' not in cols:
+        return df  # already native format
+
+    _REQUIRED = ['patient_id', 'exam_id', 'laterality', 'view',
+                 'file_path', 'years_to_last_followup']
+    missing = [c for c in _REQUIRED if c not in cols]
+    if missing:
+        raise ValueError(f"MIRAI CSV missing columns: {missing}. Found: {list(df.columns)}")
+
+    out = pd.DataFrame(index=df.index)
+    out['pid']        = df['patient_id'].astype(str).str.strip()
+    out['pid_acc']    = df['exam_id'].astype(str).str.strip()
+    out['image_path'] = df['file_path'].astype(str).str.strip()
+    out['laterality'] = df['laterality'].astype(str).str.strip().str.upper()
+    out['view']       = (df['view'].astype(str).str.strip().str.upper()
+                         .map(lambda v: _MIRAI_VIEW_NORM.get(v, v)))
+
+    ytc = pd.to_numeric(df.get('years_to_cancer',
+                                pd.Series(np.nan, index=df.index)), errors='coerce')
+    is_cancer = ytc.notna() & (ytc >= 0) & (ytc < 5)
+    out['bc']              = np.where(is_cancer, 'BC', 'NOBC')
+    out['months_to_dx']    = np.where(is_cancer, ytc * 12.0, np.nan)
+    out['followup_months'] = pd.to_numeric(
+        df['years_to_last_followup'], errors='coerce') * 12.0
+
+    for col in ['KVP', 'mAs', 'age', 'weight', 'target', 'filter', 'manufacturer', 'split_group']:
+        out[col] = df[col] if col in df.columns else np.nan
+
+    log(f"[mirai->native] {len(out)} rows | {out['pid_acc'].nunique()} exams | "
+        f"{out['pid'].nunique()} patients | {int(is_cancer.sum())} cancer rows")
+    return out
+
 
 def _load_breast_crop(fn, target_h, target_w, thresh_pct):
     """Crop to breast bounding box, then resize to (1, target_h, target_w)."""
@@ -181,7 +228,7 @@ def log(msg):
 
 
 def train_test_load(incsv, suffix='.png', complete=False, results_dir=None):
-    df = pd.read_csv(incsv, low_memory=False).copy()
+    df = _normalize_mirai_to_native(pd.read_csv(incsv, low_memory=False).copy())
 
     # Ensure pid_acc exists
     if 'pid_acc' not in df.columns:
@@ -285,7 +332,7 @@ def train_test_load_exams(incsv,
                 n_splits=n_splits,
                 results_dir=results_dir,
             )
-    df = pd.read_csv(incsv).copy()
+    df = _normalize_mirai_to_native(pd.read_csv(incsv).copy())
 
     # Ensure pid_acc exists
     if 'pid_acc' not in df.columns:
@@ -298,10 +345,9 @@ def train_test_load_exams(incsv,
     if 'pid' not in df.columns:
         df['pid'] = df['pid_acc'].str.split('_').str[0]
 
-    # Filter valid images (mAs > 0, view not empty)
-    df['mAs'] = pd.to_numeric(df['mAs'], errors='coerce')
+    # Filter valid images (view not empty)
     df['view'] = df['view'].astype(str).str.strip()
-    df = df[df['mAs'].gt(0) & df['view'].ne('')].copy()
+    df = df[df['view'].ne('')].copy()
     has_suffix = df['image_path'].astype(str).str.endswith(suffix, na=False)
     df = df[has_suffix].copy()
     log(f"After filters: {len(df)} rows, {df['pid'].nunique()} patients, {df['pid_acc'].nunique()} exams")
@@ -484,7 +530,8 @@ class ExamDataset(Dataset):
     def __init__(self, exam_ids, ds_csv, train=True, target_h=882, target_w=512,
                  thresh_pct=0.05, max_views=4, require_complete=False):
         self.exam_ids = list(exam_ids)
-        self.clin = pd.read_csv(ds_csv, low_memory=False)
+        self.clin = _normalize_mirai_to_native(
+            pd.read_csv(ds_csv, low_memory=False))
         self.clin.columns = self.clin.columns.str.lower()
         self.clin = self.clin[self.clin['image_path'].astype(str).str.endswith('.png', na=False)].copy()
         self.train = train
@@ -690,7 +737,7 @@ def write_exam_splits_5fold(
     Patient-level stratified K-fold; outputs EXAM-level CSV with:
       pid, pid_acc, bc, split  (split in [0..n_splits-1])
     """
-    df = pd.read_csv(incsv).copy()
+    df = _normalize_mirai_to_native(pd.read_csv(incsv).copy())
 
     # Ensure pid_acc / pid
     if "pid_acc" not in df.columns:

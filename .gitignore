@@ -1,5 +1,8 @@
 configs/*
 !configs/example_train.yaml
+!configs/example_inference.yaml
+checkpoint/
+test_mirai_tmp.csv
 .vscode/
 old/
 pacs.py

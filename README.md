@@ -146,7 +146,7 @@ The training CSV (`ds_csv_path`) should have one row per image with columns:
 | `image_path` | Full path to PNG mammogram |
 | `laterality` | `L` or `R` |
 | `view` | `CC` or `MLO` |
-| `bc` | `bc` or `nobc` |
+| `bc` | `BC` or `NOBC` |
 | `months_to_dx` | Months from exam to cancer diagnosis (NaN if no cancer) |
 | `followup_months` | Months of cancer-free followup |
 | `mAs` | Tube current |
@@ -159,73 +159,140 @@ Patient-level train/val splits (80/20) are stratified by cancer status with no p
 
 Unit-suffixed strings such as `age="63Y"` are parsed during dataset loading.
 
-### External Evaluation CSV (MIRAI format)
+### External Evaluation CSV
 
-The external eval CSV follows the [MIRAI](https://github.com/yala/Mirai) format. No DICOM headers or auxiliary labels needed.
+Two formats are accepted and auto-detected at load time.
+
+#### Native format
+
+No DICOM metadata required — only columns needed for exam identification and outcome labeling.
 
 ```csv
-patient_id,exam_id,laterality,view,file_path,years_to_cancer,years_to_last_followup,split_group
-P001,P001_E001,L,CC,/data/p001_lcc.png,0,1,test
-P001,P001_E001,L,MLO,/data/p001_lmlo.png,0,1,test
-P001,P001_E001,R,CC,/data/p001_rcc.png,0,1,test
-P001,P001_E001,R,MLO,/data/p001_rmlo.png,0,1,test
-P002,P002_E001,L,CC,/data/p002_lcc.png,0,1,test
-P002,P002_E001,L,MLO,/data/p002_lmlo.png,0,1,test
-P002,P002_E001,R,CC,/data/p002_rcc.png,0,1,test
-P002,P002_E001,R,MLO,/data/p002_rmlo.png,0,1,test
+pid,pid_acc,laterality,view,image_path,bc,months_to_dx,followup_months
+P001,P001_E001,L,CC,/data/p001_lcc.png,NOBC,,24
+P001,P001_E001,L,MLO,/data/p001_lmlo.png,NOBC,,24
+P001,P001_E001,R,CC,/data/p001_rcc.png,NOBC,,24
+P001,P001_E001,R,MLO,/data/p001_rmlo.png,NOBC,,24
+P002,P002_E001,L,CC,/data/p002_lcc.png,BC,14,14
+P002,P002_E001,L,MLO,/data/p002_lmlo.png,BC,14,14
+P002,P002_E001,R,CC,/data/p002_rcc.png,BC,14,14
+P002,P002_E001,R,MLO,/data/p002_rmlo.png,BC,14,14
 ```
 
 | Column | Description |
 |---|---|
-| `patient_id` | Patient identifier |
-| `exam_id` | `{patient_id}_{accession}` exam identifier |
+| `pid` | Patient ID string |
+| `pid_acc` | `{pid}_{accession}` — unique exam identifier |
 | `laterality` | `L` or `R` |
 | `view` | `CC` or `MLO` |
-| `file_path` | Full path to PNG mammogram |
-| `years_to_cancer` | Years from exam to cancer diagnosis (empty/NaN if no cancer) |
-| `years_to_last_followup` | Years of cancer-free followup (must be >= 1 year) |
-| `split_group` | e.g. `test` |
+| `image_path` | Absolute path to 16-bit grayscale PNG |
+| `bc` | `BC` (cancer) or `NOBC` |
+| `months_to_dx` | Months from exam to cancer diagnosis (blank/NaN if NOBC) |
+| `followup_months` | Months of known cancer-free followup (must be > 0) |
 
-- Each exam needs 4 rows (LCC, LMLO, RCC, RMLO)
-- `years_to_cancer`: leave empty/NaN for patients without cancer
-- `years_to_last_followup`: must be >= 1 year
-- By default, only complete exams (all 4 views) are evaluated
+#### MIRAI format
+
+If your CSV has `patient_id` / `file_path` columns (MIRAI convention), it is converted automatically — no preprocessing needed.
+
+```csv
+patient_id,exam_id,laterality,view,file_path,years_to_cancer,years_to_last_followup,split_group
+P001,P001_E001,L,CC,/data/p001_lcc.png,100,2,test
+...
+```
+
+| Column | Description |
+|---|---|
+| `patient_id` | Patient ID string → mapped to `pid` |
+| `exam_id` | Exam identifier → mapped to `pid_acc` |
+| `file_path` | Image path → mapped to `image_path` |
+| `laterality` | `L` or `R` |
+| `view` | `CC`, `MLO`, or prefixed forms (`LCC`, `RMLO`, etc.) — normalized automatically |
+| `years_to_cancer` | Years to diagnosis; values ≥ 5 or blank → NOBC |
+| `years_to_last_followup` | Years of cancer-free followup → converted to `followup_months` |
+
+Detection is based on the presence of `patient_id` or `file_path` columns. When a MIRAI CSV is loaded, the conversion is logged: `[mirai->native] N rows | M exams | ...`
+
+#### Notes (both formats)
+
+- Each exam requires 4 rows: LCC, LMLO, RCC, RMLO (use `--incomplete` to relax)
+- `followup_months` controls which risk horizons are valid — e.g. 24 months unlocks 1yr and 2yr only
+- AUC is computed per horizon; requires both BC and NOBC exams in the dataset
 
 ## External Evaluation
+
+For a collaborator who only needs inference, the minimal handoff is:
+- this repo
+- the checkpoint `.pth` file (or a `checkpoint/` directory containing it)
+- a dataset CSV in native or MIRAI format
+
+**Quickstart (3 steps):**
+
+1. Edit `configs/example_inference.yaml` — fill in `checkpoint`, `csv`, and `output`
+2. Run: `python eval_external.py`
+3. Predictions are written to `output` as CSV; a same-name parquet sidecar is also attempted
+
+The config file contains both eval parameters and the model architecture spec in one place. The `cats`/`regs`/`risk_specs` entries must match the heads in the `.pth`; the defaults in `example_inference.yaml` match the provided checkpoint. Adjust only if you trained a checkpoint with a different head configuration.
+
+For the provided checkpoint, most users only need to change:
+- `checkpoint`
+- `csv`
+- `output`
+
+Change `gpus` to `[]` for CPU-only inference. On Windows, set `num_workers: 0`.
 
 ### CLI usage
 
 ```bash
-# Basic
-python eval_external.py --checkpoint model.pth --csv data.csv
+# Use a config file (recommended)
+python eval_external.py --config configs/example_inference.yaml
 
-# With options
+# Override specific fields from a config
+python eval_external.py --config configs/example_inference.yaml --no-cancer
+
+# Pass everything via CLI args
 python eval_external.py \
     --checkpoint results/last.pth \
     --csv my_dataset.csv \
-    --batch_size 16 \
-    --num_workers 8 \
+    --num-workers 8 \
     --gpus 0 1 \
-    --output_csv predictions.csv
+    --output predictions.csv
 
-# Include incomplete exams
+# Include incomplete exams (fewer than 4 views)
 python eval_external.py --checkpoint model.pth --csv data.csv --incomplete
 ```
 
-When a run directory is passed, external evaluation prefers `*_best.pth` and falls back to `last.pth` if a best checkpoint is not present.
+`--no-cancer` works with either native or MIRAI-format CSVs and filters at the patient level before evaluation.
+
+When a run directory is passed, evaluation prefers `*_best.pth` and falls back to `last.pth`.
+
+See `configs/example_inference.yaml` for a full annotated config template.
+
+### Prediction file
+
+The main output CSV has one row per exam with these columns:
+- `exam_id`
+- `risk_h1yr_prob` ... `risk_h5yr_prob`
+- `risk_h1yr_true` ... `risk_h5yr_true`
+- `risk_h1yr_valid` ... `risk_h5yr_valid`
+
+For horizons beyond the available follow-up, `*_true` is blank and `*_valid` is `False`.
 
 ### Python API
 
 ```python
+import yaml
 from pipelines import eval_external_mirai_dataset
+
+run_cfg = yaml.safe_load(open("configs/example_inference.yaml"))
 
 metrics = eval_external_mirai_dataset(
     checkpoint_path="path/to/checkpoint.pth",
-    csv_path="path/to/data.csv",
+    csv_path="path/to/data.csv",   # native or MIRAI format
     batch_size=8,
     gpus=[0],
     require_complete=True,
-    output_csv="predictions.csv"
+    output_csv="predictions.csv",
+    run_cfg=run_cfg,               # provides backbone/cats/regs/risk_specs
 )
 
 print(f"Mean AUC: {metrics['auc_mean']:.4f}")
@@ -251,9 +318,11 @@ EVALUATION RESULTS
 ## Troubleshooting
 
 - **Import errors**: Run from the repo directory, or add it to `PYTHONPATH`
-- **CUDA out of memory**: Reduce `--batch_size` (try 4 or 2)
-- **Low exam count**: Check column names are exact (case-sensitive), all 4 views present, followup >= 1 year
-- **Slow loading**: Increase `--num_workers`
+- **CUDA out of memory**: Reduce `--batch-size` (try 4 or 2)
+- **Low exam count**: Check column names match exactly, all 4 views present per exam, `followup_months` > 0
+- **MIRAI CSV not detected**: Confirm `patient_id` or `file_path` column is present; check for extra whitespace in headers
+- **AUC is nan**: Dataset contains only one class (all BC or all NOBC) — AUC requires both
+- **Slow loading**: Increase `--num-workers` (use 0 on Windows)
 
 ## Smoke Test
 
