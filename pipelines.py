@@ -684,10 +684,13 @@ def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_wor
         temp_csv      = None
 
     try:
-        train_exams, val_exams = train_test_load_exams(
-            effective_csv, make_if_missing=False,
-        )
-        all_exams = np.concatenate([train_exams, val_exams])
+        _df = _normalize_mirai_to_native(pd.read_csv(effective_csv, low_memory=False))
+        if 'pid_acc' not in _df.columns:
+            if {'pid', 'accession'}.issubset(_df.columns):
+                _df['pid_acc'] = _df['pid'].astype(str) + "_" + _df['accession'].astype(str)
+            else:
+                raise KeyError("Need 'pid_acc' or ('pid', 'accession') columns")
+        all_exams = _df['pid_acc'].unique()
         print(f"Total exams: {len(all_exams)}")
 
         target_h = run_cfg.get('target_h', 882)
