@@ -11,7 +11,7 @@ Multi-task deep learning model for breast cancer risk prediction from screening 
 - **Regression heads** - tube voltage (KVP), tube current (mAs), time-to-diagnosis
 - **Risk head** - 5-horizon breast cancer risk (1yr, 2yr, 3yr, 4yr, 5yr)
 
-**Exam-level inference:** For risk prediction, all 4 views of a screening exam (LCC, LMLO, RCC, RMLO) are processed independently through the shared backbone, then aggregated via masked mean pooling before the risk head.
+**Exam-level inference:** For risk prediction, all 4 views of a screening exam (LCC, LMLO, RCC, RMLO) are processed independently through the shared backbone. The model API supports either view/laterality-aware Transformer aggregation with a learned CLS token or masked mean pooling before the risk head; masked mean pooling remains the default.
 
 **Staged training** (three phases):
 1. **Pretrain** - image-level auxiliary tasks only (backbone warmup)
