@@ -2,6 +2,10 @@
 
 Multi-task deep learning model for breast cancer risk prediction from screening mammograms. Predicts 1-5 year cancer risk at the exam level using a staged training approach that jointly learns auxiliary imaging features and risk prediction.
 
+## Research Result
+
+The associated research study reported a mean internal-validation AUC of **0.793 across 1-4 year horizons**, using patient-separated training and validation data. The 5-year output was exploratory and excluded from that mean. The external-evaluation tooling below supports applying the model to other datasets; completed external validation is not claimed.
+
 ## Architecture
 
 **Backbone:** EfficientNet-V2-S (grayscale-adapted, pretrained on ImageNet)
@@ -302,16 +306,18 @@ for h in range(1, 6):
 
 ### Example output
 
+Output format only. The placeholders below are not measured results; running evaluation on a labeled dataset produces the corresponding values.
+
 ```
 ============================================================
 EVALUATION RESULTS
 ============================================================
-  1-year AUC: 0.8234
-  2-year AUC: 0.8156
-  3-year AUC: 0.8089
-  4-year AUC: 0.7923
-  5-year AUC: 0.7801
-  Mean AUC:     0.8041
+  1-year AUC: <computed value>
+  2-year AUC: <computed value>
+  3-year AUC: <computed value>
+  4-year AUC: <computed value>
+  5-year AUC: <computed value>
+  Mean AUC:   <computed value>
 ============================================================
 ```
 
