@@ -5,6 +5,12 @@ ds_csv_path: /path/to/mammo_db.csv
 results_dir: /path/to/results/
 
 backbone: effv2s
+use_transformer: true
+transformer_kwargs:
+  num_layers: 2
+  num_heads: 8
+  dropout: 0.1
+  num_view_types: 4
 gpus: [0]
 num_workers: 4
 

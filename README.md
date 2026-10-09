@@ -4,7 +4,16 @@ Multi-task deep learning model for breast cancer risk prediction from screening 
 
 ## Research Result
 
-The associated research study reported a mean internal-validation AUC of **0.793 across 1-4 year horizons**, using patient-separated training and validation data. The 5-year output was exploratory and excluded from that mean. The external-evaluation tooling below supports applying the model to other datasets; completed external validation is not claimed.
+The reported transformer experiment used patient-separated internal validation:
+
+| Horizon | AUC | Eligible exams | Positive / negative |
+| --- | --- | --- | --- |
+| 1 year | 0.746 | 837 | 87 / 750 |
+| 2 years | 0.817 | 491 | 112 / 379 |
+| 3 years | 0.807 | 353 | 131 / 222 |
+| 4 years | 0.802 | 243 | 137 / 106 |
+
+These are historical point estimates, not a fresh evaluation of the current code. Horizons overlap and have different follow-up eligibility. Five-year evaluation had 137 positive exams and only one negative, so it is not featured. The original data are no longer available for a rerun or confidence intervals. Completed external validation is not claimed.
 
 ## Architecture
 
@@ -15,7 +24,7 @@ The associated research study reported a mean internal-validation AUC of **0.793
 - **Regression heads** - tube voltage (KVP), tube current (mAs), time-to-diagnosis
 - **Risk head** - 5-horizon breast cancer risk (1yr, 2yr, 3yr, 4yr, 5yr)
 
-**Exam-level inference:** For risk prediction, all 4 views of a screening exam (LCC, LMLO, RCC, RMLO) are processed independently through the shared backbone. The model API supports either view/laterality-aware Transformer aggregation with a learned CLS token or masked mean pooling before the risk head; masked mean pooling remains the default.
+**Exam-level inference:** For risk prediction, all 4 views of a screening exam (LCC, LMLO, RCC, RMLO) are processed independently through the shared backbone. The model API supports either view/laterality-aware Transformer aggregation with a learned CLS token or masked mean pooling before the risk head; the example configs select the two-layer, eight-head Transformer. Configs that omit `use_transformer` retain the older mean-pooling behavior.
 
 **Staged training** (three phases):
 1. **Pretrain** - image-level auxiliary tasks only (backbone warmup)
@@ -99,7 +108,23 @@ risk:
     weight: 5.0
 ```
 
-Use `configs/example_train.yaml` as a starting template.
+Use `configs/example_train.yaml` as a starting template. It explicitly selects:
+
+```yaml
+use_transformer: true
+transformer_kwargs:
+  num_layers: 2
+  num_heads: 8
+  dropout: 0.1
+  num_view_types: 4
+```
+
+Training saves these architecture settings in `run_config.yaml`; evaluation
+reconstructs the same model. View IDs distinguish LCC, LMLO, RCC and RMLO.
+Set `use_transformer: false` for an older mean-pooling checkpoint. Checkpoint
+loading remains strict: changing aggregation requires matching weights, not
+relabeling an existing checkpoint. The example is an executable template, not
+an exact reconstruction of every historical training setting.
 
 ### Curriculum / Optimization
 
@@ -235,7 +260,7 @@ For a collaborator who only needs inference, the minimal handoff is:
 2. Run: `python eval_external.py`
 3. Predictions are written to `output` as CSV; a same-name parquet sidecar is also attempted
 
-The config file contains both eval parameters and the model architecture spec in one place. The `cats`/`regs`/`risk_specs` entries must match the heads in the `.pth`; the defaults in `example_inference.yaml` match the provided checkpoint. Adjust only if you trained a checkpoint with a different head configuration.
+The config file contains both eval parameters and the model architecture spec in one place. The `cats`/`regs`/`risk_specs` entries must match the heads in the `.pth`; the aggregation and head settings must be checked against your checkpoint. Adjust only if you trained a checkpoint with a different head configuration.
 
 For the provided checkpoint, most users only need to change:
 - `checkpoint`
@@ -299,7 +324,6 @@ metrics = eval_external_mirai_dataset(
     run_cfg=run_cfg,               # provides backbone/cats/regs/risk_specs
 )
 
-print(f"Mean AUC: {metrics['auc_mean']:.4f}")
 for h in range(1, 6):
     print(f"  {h}-year AUC: {metrics.get(f'auc_h{h}yr', float('nan')):.4f}")
 ```
@@ -317,7 +341,6 @@ EVALUATION RESULTS
   3-year AUC: <computed value>
   4-year AUC: <computed value>
   5-year AUC: <computed value>
-  Mean AUC:   <computed value>
 ============================================================
 ```
 
@@ -330,6 +353,11 @@ EVALUATION RESULTS
 - **AUC is nan**: Dataset contains only one class (all BC or all NOBC) — AUC requires both
 - **Slow loading**: Increase `--num-workers` (use 0 on Windows)
 
+Evaluation prints each horizon's AUC separately. The returned `auc_mean` is
+retained for API compatibility and averages eligible horizons; it is not the
+portfolio headline. Training still selects checkpoints using the mean across
+`ckpt_max_yr` horizons (default four).
+
 ## Smoke Test
 
 After installing dependencies, run:
@@ -339,6 +367,15 @@ python scripts/smoke_test.py
 ```
 
 This checks config parsing, core imports, and CLI `--help` paths without requiring training data.
+
+Run the focused transformer/configuration checks with:
+
+```bash
+python -B -m unittest discover -s tests -v
+```
+
+These use synthetic inputs and a small substituted image encoder; they verify
+aggregation, training gradients and strict checkpoint reconstruction, not AUC.
 
 ## License
 

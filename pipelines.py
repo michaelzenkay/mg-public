@@ -328,7 +328,7 @@ def run_train_staged(ds_csv_path, epochs=100, batch_size_img=4, batch_size_exam=
                      cat_specs=None, reg_specs=None, risk_specs=None, require_complete=True,
                      gradient_accumulation=2, run_name=None, ckpt_max_yr=4,
                      lr_mult_heads=3.0, wd_backbone=1e-4, wd_heads=1e-4,
-                     debug_frac=1.0):
+                     debug_frac=1.0, use_transformer=False, transformer_kwargs=None):
     """Three-phase staged training:
     Phase 1 (0..pretrain_epochs):             aux tasks only — backbone pretraining.
     Phase 2 (pretrain..pretrain+taper):       linear taper from aux-only to risk-only.
@@ -363,6 +363,8 @@ def run_train_staged(ds_csv_path, epochs=100, batch_size_img=4, batch_size_exam=
         batch_size_img=batch_size_img, batch_size_exam=batch_size_exam,
         gradient_accumulation=gradient_accumulation, gpus=gpus,
         require_complete=require_complete,
+        use_transformer=use_transformer, transformer_kwargs=transformer_kwargs,
+        target_h=target_h, target_w=target_w,
         cat_specs=[s.name for s in cat_specs],
         reg_specs=[s.name for s in reg_specs],
         risk_specs=[dict(name=s.name, horizons=s.horizons, weight=s.weight) for s in risk_specs],
@@ -431,7 +433,8 @@ def run_train_staged(ds_csv_path, epochs=100, batch_size_img=4, batch_size_exam=
     # Model + optimizer
     model, device = build_model(
         backbone=backbone, in_chans=1, pretrained=True, gpus=gpus,
-        cat_specs=cat_specs, reg_specs=reg_specs, risk_specs=risk_specs
+        cat_specs=cat_specs, reg_specs=reg_specs, risk_specs=risk_specs,
+        use_transformer=use_transformer, transformer_kwargs=transformer_kwargs,
     )
     base_lr   = 3e-4 if "v2s" in backbone else lr
     optimizer = torch.optim.AdamW(
@@ -708,6 +711,8 @@ def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_wor
         model, device = build_model(
             backbone=backbone, in_chans=1, pretrained=False, gpus=gpus,
             cat_specs=cat_specs, reg_specs=reg_specs, risk_specs=risk_specs,
+            use_transformer=run_cfg.get('use_transformer', False),
+            transformer_kwargs=run_cfg.get('transformer_kwargs'),
         )
         load_ckpt(ckpt_path, model, optimizer=None, map_location=device, strict=True)
         print("Model loaded")
@@ -720,7 +725,6 @@ def eval_external_mirai_dataset(checkpoint_path, csv_path, batch_size=8, num_wor
             key = f'auc_h{h+1}yr'
             if key in metrics:
                 print(f"  {h+1}-year AUC: {metrics[key]:.4f}")
-        print(f"  Mean AUC:     {metrics.get('auc_mean', float('nan')):.4f}")
         print("="*50)
         return metrics
 

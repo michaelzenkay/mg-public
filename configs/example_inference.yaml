@@ -20,6 +20,13 @@ no_cancer: false
 # ── Model spec ────────────────────────────────────────────────────────────────
 # Must match the heads in the .pth. Adjust cats/regs to match your training config.
 backbone: effv2s
+# Match the trained checkpoint. For older mean-pooling weights, set false.
+use_transformer: true
+transformer_kwargs:
+  num_layers: 2
+  num_heads: 8
+  dropout: 0.1
+  num_view_types: 4
 target_h: 882
 target_w: 512
 

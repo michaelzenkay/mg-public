@@ -93,6 +93,8 @@ def main():
         wd_heads=wd_heads,
         debug_frac=debug_frac,
         freeze_backbone_epochs=freeze_backbone_epochs,
+        use_transformer=cfg.get("use_transformer", False),
+        transformer_kwargs=cfg.get("transformer_kwargs"),
     )
 
 
